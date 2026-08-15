@@ -19,6 +19,7 @@ import {
   type Phase,
   type PromotionSignal,
 } from "./state.js"
+import { rewriteThinkingText } from "./thinking.js"
 
 export { DEFAULT_CONFIG, parseConfig } from "./config.js"
 export type { AnchorConfig, PersonaAfterPromotion, PromoteOn } from "./config.js"
@@ -27,6 +28,7 @@ export type { ModelRef } from "./matcher.js"
 export { MINIMAL_PERSONA } from "./prompt.js"
 export { MINIMAL_BASH_DESCRIPTION, MINIMAL_BASH_SCHEMA } from "./bash.js"
 export { STR_REPLACE_EDITOR_DESCRIPTION, STR_REPLACE_EDITOR_SCHEMA } from "./str-replace-editor.js"
+export { DEFAULT_THINKING_REPLACEMENTS, rewriteThinkingText } from "./thinking.js"
 export type { Phase } from "./state.js"
 
 type ToolCatalog = Record<string, unknown>
@@ -50,6 +52,10 @@ export type AnchorHooks = Hooks & {
   "experimental.chat.request.transform"?: (
     input: RequestTransformInput,
     output: RequestTransformOutput,
+  ) => Promise<void>
+  "experimental.reasoning.transform"?: (
+    input: { sessionID: string; messageID: string; partID: string; model: Model },
+    output: { text: string },
   ) => Promise<void>
 }
 
@@ -148,6 +154,12 @@ export function createAnchorHooks(
 
     async "tool.execute.before"(input) {
       state.promote(input.sessionID, "tool-call")
+    },
+
+    async "experimental.reasoning.transform"(input, output) {
+      if (!config.rewriteThinking) return
+      if (!matches(modelRef(input.model))) return
+      output.text = rewriteThinkingText(output.text, { replacements: config.thinkingReplacements })
     },
 
     async event({ event }) {

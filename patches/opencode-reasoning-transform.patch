@@ -1,0 +1,45 @@
+diff --git a/packages/opencode/src/session/processor.ts b/packages/opencode/src/session/processor.ts
+index 20aa8a8..ebc3b07 100644
+--- a/packages/opencode/src/session/processor.ts
++++ b/packages/opencode/src/session/processor.ts
+@@ -206,6 +206,20 @@ const layer = Layer.effect(
+ 
+       const finishReasoning = Effect.fn("SessionProcessor.finishReasoning")(function* (reasoningID: string) {
+         if (!(reasoningID in ctx.reasoningMap)) return
++        const part = ctx.reasoningMap[reasoningID]
++        if (part.text.length > 0) {
++          const rewritten = yield* plugin.trigger(
++            "experimental.reasoning.transform",
++            {
++              sessionID: part.sessionID,
++              messageID: part.messageID,
++              partID: part.id,
++              model: input.model,
++            },
++            { text: part.text },
++          )
++          part.text = rewritten.text
++        }
+         // oxlint-disable-next-line no-self-assign -- reactivity trigger
+         ctx.reasoningMap[reasoningID].text = ctx.reasoningMap[reasoningID].text
+         ctx.reasoningMap[reasoningID].time = { ...ctx.reasoningMap[reasoningID].time, end: Date.now() }
+diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
+index edfa013..4c75af4 100644
+--- a/packages/plugin/src/index.ts
++++ b/packages/plugin/src/index.ts
+@@ -294,6 +294,15 @@ export interface Hooks {
+       system: string[]
+     },
+   ) => Promise<void>
++  /**
++   * Rewrite the finalized reasoning (thinking) part text for one assistant
++   * message before it is committed. The hook receives the accumulated text
++   * and may replace it; leaving `text` untouched preserves native behavior.
++   */
++  "experimental.reasoning.transform"?: (
++    input: { sessionID: string; messageID: string; partID: string; model: Model },
++    output: { text: string },
++  ) => Promise<void>
+   "experimental.provider.small_model"?: (input: { provider: ProviderV2 }, output: { model?: ModelV2 }) => Promise<void>
+   /**
+    * Called before session compaction starts. Allows plugins to customize

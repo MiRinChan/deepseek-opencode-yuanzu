@@ -116,3 +116,27 @@ git apply /path/to/opencode-tools-transform.patch
 The patch changes two files. It was validated by a complete Nix build against `v1.18.18`, by clean `git apply --check` plus `git diff --check` against the cited `dev` commit, and by the local-provider integration test that observes both HTTP request bodies.
 
 The plugin defines the extra hook structurally so it still compiles against the current npm `@opencode-ai/plugin` package. An unpatched OpenCode ignores that property. The plugin does not separately register `experimental.chat.system.transform`, making the unpatched runtime model-visible no-op rather than a partial implementation.
+
+## Reasoning (thinking chain) rewrite hook
+
+Rewriting the assistant's chain of thought is also impossible as a pure external plugin: reasoning is streamed through `session.updatePart`/`MessageV2.PartDelta` and committed by `SessionProcessor.finishReasoning` in [`processor.ts`](https://github.com/anomalyco/opencode/blob/4643e65ad6334de3e4e68dedc201d5fbb828c9fe/packages/opencode/src/session/processor.ts). The `event` hook is observer-only and the SDK exposes no part-update client, so there is no write seam without a patch.
+
+The second included patch adds:
+
+```ts
+"experimental.reasoning.transform"?: (
+  input: { sessionID: string; messageID: string; partID: string; model: Model },
+  output: { text: string },
+) => Promise<void>
+```
+
+`finishReasoning` calls it with the fully accumulated reasoning text before the final `session.updatePart` commit; the returned `text` is what gets persisted and re-emitted to the client. Both the normal `reasoning-end` path and the abort/step-finish cleanup paths go through `finishReasoning`, so every path is covered. Streaming deltas are intentionally left untouched: the finalized part text is rewritten in one atomic commit. A no-op plugin (leaving `text` unchanged) preserves native behavior byte-for-byte.
+
+Apply the patch (both files) alongside the request-hook patch:
+
+```bash
+git apply --check /path/to/opencode-tools-transform.patch
+git apply --check /path/to/opencode-reasoning-transform.patch
+```
+
+The two patches touch disjoint regions and apply cleanly in either order.

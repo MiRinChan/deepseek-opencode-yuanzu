@@ -38,8 +38,9 @@ provider request #1                              provider request #2+
 2. 补丁增加的 `experimental.chat.request.transform` 在每次真实 LLM request 上原子接收 assembled system 与 permission-filtered tools；显式标记的 title/summary small-model 辅助请求直接透传。
 3. bootstrap 阶段从 permission-filtered 原生工具构造 Minimal schema 适配器，替换 system，再删除其余 key。
 4. `message.part.updated` 与 `tool.execute.before` 观察 durable tool call；completed assistant message 可作为 text-only promotion 信号。
-5. 下一次 loop 重新解析当前完整目录；promoted 阶段不修改 tools。
-6. `session.deleted` 和 `dispose` 清理进程内状态。
+5. `experimental.reasoning.transform` 在每条 reasoning part 流式结束后、提交到 store 前获得整段文本，`rewriteThinking` 配置开启时改写其中的 `Let me`。
+6. 下一次 loop 重新解析当前完整目录；promoted 阶段不修改 tools。
+7. `session.deleted` 和 `dispose` 清理进程内状态。
 
 原子 hook 很重要：system 数组无需跨 hook 缓存和配对；未打补丁时 hook 不会被调用，也就不会出现 Minimal system 配完整工具目录的半成品状态。
 
@@ -98,10 +99,11 @@ full_catalog -> delete non-bootstrap keys -> {bash, read}
 
 ## 上游补丁
 
-OpenCode `1.18.18` 的公开 API 没有逐 LLM request 的 tools/request transform。仓库补丁修改：
+OpenCode `1.18.18` 的公开 API 没有逐 LLM request 的 tools/request transform，也没有改写 reasoning part 的 seam。仓库补丁修改：
 
 - `packages/opencode/src/session/llm/request.ts`：在 provider preparation 前调用原子 transform，并让 system、messages、tools 与返回值都使用 transform 结果；
-- `packages/plugin/src/index.ts`：声明实验性 hook 类型。
+- `packages/opencode/src/session/processor.ts`：在 reasoning part 完成提交前调用 `experimental.reasoning.transform`，供插件改写最终思考链文本；
+- `packages/plugin/src/index.ts`：声明两个实验性 hook 类型。
 
 具体论证、被拒绝的替代方案和最小 API 见 [docs/UPSTREAM_HOOK_REQUIRED.md](docs/UPSTREAM_HOOK_REQUIRED.md)。
 
@@ -151,8 +153,11 @@ nix build .#opencode
 
 ```bash
 git -C /path/to/opencode apply --check patches/opencode-tools-transform.patch
+git -C /path/to/opencode apply --check patches/opencode-reasoning-transform.patch
 git diff --check
 ```
+
+两个补丁作用于不同文件区域，可独立或按顺序应用；`opencode-reasoning-transform.patch` 的 `plugin/src/index.ts` hunk 锚定在 `experimental.chat.system.transform` 之后，与 request-hook 补丁不相交。
 
 ## 已核对基线
 

@@ -73,7 +73,12 @@ let
   };
 
   patchedOpenCode = sourceOpenCode.overrideAttrs (old: {
-    patches = (old.patches or [ ]) ++ [ ../patches/opencode-tools-transform.patch ];
+    patches =
+      (old.patches or [ ])
+      ++ [
+        ../patches/opencode-tools-transform.patch
+        ../patches/opencode-reasoning-transform.patch
+      ];
     passthru = (old.passthru or { }) // {
       anchorPlugin = anchorPlugin;
       anchorPluginSpecifier = pluginSpecifier;

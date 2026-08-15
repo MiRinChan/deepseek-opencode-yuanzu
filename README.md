@@ -106,9 +106,32 @@ git -C /path/to/opencode apply \
 | `bootstrapTools` | `["bash", "str_replace_editor"]` | 首次请求的 Minimal 工具 ID |
 | `personaAfterPromotion` | `"minimal"` | promotion 后选择 `minimal` 前缀或 `original` 原样透传 |
 | `promoteOn` | `"either"` | 选择 `either`、`tool-call` 或 `assistant-message` |
+| `rewriteThinking` | `false` | 开启思考链改写：把 `Let me` 随机替换为 `thinkingReplacements` 之一 |
+| `thinkingReplacements` | `["I will", "We will", "Let's"]` | 思考链改写用的候选项（可为空数组以禁用） |
 | `debug` | `false` | 输出不含 prompt、工具参数和凭据的状态日志 |
 
 内置检测会识别 `deepseek-v4-pro`、`deepseek/deepseek-v4-pro`、`DeepSeek-V4-Pro`、`deepseek-v4.1-pro`，以及 DeepSeek provider 下的 `v4-pro`。额外的 `models` 规则只会扩展匹配范围，不会关闭内置安全规则。
+
+### 思考链改写
+
+`rewriteThinking: true` 时，目标模型每条 assistant 消息的思考链（reasoning part）在提交时会被改写：所有 `Let me`（大小写不敏感、整词匹配）随机替换为 `thinkingReplacements` 中的一项，逐处独立随机；`let me` 开头小写时保持小写形式。这依赖同一组上游补丁里的 `experimental.reasoning.transform` hook。
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    [
+      "file:///absolute/path/deepseek-opencode-yuanzu/dist/src/plugin-entry.js",
+      {
+        "enabled": true,
+        "models": ["deepseek-v4-pro"],
+        "rewriteThinking": true,
+        "thinkingReplacements": ["I will", "We will", "Let's"]
+      }
+    ]
+  ]
+}
+```
 
 ## 已知限制
 
@@ -117,6 +140,7 @@ git -C /path/to/opencode apply \
 - `bash` 的 provider-visible description/schema 与 Harness Minimal 一致，但底层仍是 OpenCode 的一次性 shell 进程；因此 `cd`、shell 变量等进程状态不会像 Harness persistent bash 那样跨调用保留。插件不会为追求这一点绕过 OpenCode 权限另建 shell runtime。
 - `str_replace_editor` 的 schema 和四个命令与当前 Harness 对齐；执行委托给 OpenCode 原生工具，因此极长单行、二进制文件与格式化/LSP 后处理仍遵循 OpenCode 行为。
 - `personaAfterPromotion: "minimal"` 会在原生 assembled system 前加 Minimal persona，但不会删除后面的原生 persona。
+- `rewriteThinking` 在 reasoning 流式生成结束、part 提交时改写整段文本；生成过程中实时流出的原文不会逐 delta 改写，结束后会刷新为改写结果。
 - 恢复历史 promotion 依赖 OpenCode 的只读 session messages API；不可用时退化为当前进程内状态。
 - Nix 版本从源码构建 OpenCode，首次构建通常比官方预编译包更久。
 

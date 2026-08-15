@@ -1,5 +1,7 @@
 import type { PluginOptions } from "@opencode-ai/plugin"
 
+import { DEFAULT_THINKING_REPLACEMENTS } from "./thinking.js"
+
 export type PersonaAfterPromotion = "minimal" | "original"
 export type PromoteOn = "either" | "tool-call" | "assistant-message"
 
@@ -9,6 +11,8 @@ export interface AnchorConfig {
   bootstrapTools: string[]
   personaAfterPromotion: PersonaAfterPromotion
   promoteOn: PromoteOn
+  rewriteThinking: boolean
+  thinkingReplacements: string[]
   debug: boolean
 }
 
@@ -18,6 +22,8 @@ export const DEFAULT_CONFIG: Readonly<AnchorConfig> = Object.freeze({
   bootstrapTools: ["bash", "str_replace_editor"],
   personaAfterPromotion: "minimal",
   promoteOn: "either",
+  rewriteThinking: false,
+  thinkingReplacements: [...DEFAULT_THINKING_REPLACEMENTS],
   debug: false,
 })
 
@@ -70,6 +76,12 @@ export function parseConfig(options: PluginOptions | undefined): AnchorConfig {
       DEFAULT_CONFIG.promoteOn,
       ["either", "tool-call", "assistant-message"],
       "promoteOn",
+    ),
+    rewriteThinking: booleanOption(input.rewriteThinking, DEFAULT_CONFIG.rewriteThinking, "rewriteThinking"),
+    thinkingReplacements: stringArrayOption(
+      input.thinkingReplacements,
+      DEFAULT_CONFIG.thinkingReplacements,
+      "thinkingReplacements",
     ),
     debug: booleanOption(input.debug, DEFAULT_CONFIG.debug, "debug"),
   }
