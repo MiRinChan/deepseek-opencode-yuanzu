@@ -4,12 +4,12 @@
   "version": "0.1.0",
   "description": "DSH/RL-aligned bootstrap scaffold for DeepSeek V4 Pro sessions in OpenCode",
   "type": "module",
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/src/plugin-entry.js",
+  "types": "./dist/src/plugin-entry.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js"
+      "types": "./dist/src/plugin-entry.d.ts",
+      "import": "./dist/src/plugin-entry.js"
     }
   },
   "files": [
@@ -17,6 +17,7 @@
     "docs",
     "patches",
     "README.md",
+    "WORK.md",
     "LICENSE"
   ],
   "scripts": {

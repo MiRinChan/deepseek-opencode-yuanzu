@@ -52,7 +52,7 @@ let
   });
 
   anchorPlugin = final.callPackage ./plugin.nix { };
-  pluginSpecifier = "file://${anchorPlugin}/lib/opencode-deepseek-v4-anchor/index.js";
+  pluginSpecifier = "file://${anchorPlugin}/lib/opencode-deepseek-v4-anchor/plugin-entry.js";
   pluginConfig = builtins.toJSON {
     plugin = [
       [
