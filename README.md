@@ -7,7 +7,7 @@
 这个项目不声称存在“隐藏模式”。现有实验只表明 DeepSeek V4 Pro 对 agent harness / scaffold 敏感；它们不能证明所有任务都会提升。
 
 > [!IMPORTANT]
-> 截至 OpenCode `dev` 提交 `4643e65`，公开插件 API 缺少逐 LLM request 的原子 system/tool transform。完整功能需要应用仓库内的最小上游补丁。未应用补丁时，OpenCode 不会调用该额外 hook，本插件保持 model-visible no-op。详见 [docs/UPSTREAM_HOOK_REQUIRED.md](docs/UPSTREAM_HOOK_REQUIRED.md)。
+> 截至 OpenCode `v1.18.18`（以及核对时的 `dev` 提交 `4643e65`），公开插件 API 缺少逐 LLM request 的原子 system/tool transform。完整功能需要应用仓库内的最小上游补丁。未应用补丁时，OpenCode 不会调用该额外 hook，本插件保持 model-visible no-op。详见 [docs/UPSTREAM_HOOK_REQUIRED.md](docs/UPSTREAM_HOOK_REQUIRED.md)。
 
 ## 解决什么问题
 
@@ -109,6 +109,90 @@ git -C /path/to/opencode apply \
 
 默认值就是上面的配置，安装后无需切换 agent/preset 或输入特殊 prompt。发布到 npm 后，file URL 可替换为包名 `opencode-deepseek-v4-anchor`。
 
+## Nix：适配 `numtide/llm-agents.nix`
+
+仓库提供 [`overlays.default`](nix/overlay.nix)，专门覆盖 `llm-agents.nix` 命名空间里的 `pkgs.llm-agents.opencode`。当前适配快照为：
+
+- `numtide/llm-agents.nix`：`b4a645976fff76ef94dd60b7d4f9deaa216f40bd`
+- `llm-agents.nix` 的 OpenCode：`1.18.18`
+- `llm-agents.nix` 锁定的 nixpkgs 源码包基线：`1.18.16`，由本 overlay 用 nixpkgs 已验证哈希精确更新为 `1.18.18`
+
+`llm-agents.nix` 自己的 OpenCode derivation 安装官方预编译二进制，不能用 `patches` 修改内嵌代码。因此本 overlay：
+
+1. 保留 `llm-agents.overlays.shared-nixpkgs` 提供的整个 `pkgs.llm-agents` 命名空间；
+2. 复用 `pkgs.opencode` 的源码构建逻辑，将 version、source 和 node_modules 固定输出更新到 `1.18.18`；
+3. 仅在 Nix 构建沙盒内应用 [`patches/opencode-tools-transform.patch`](patches/opencode-tools-transform.patch)；
+4. 用 Nix 构建本插件，并让包装后的 `opencode` 默认通过 `OPENCODE_CONFIG_CONTENT` 加载它；
+5. 只替换 `pkgs.llm-agents.opencode`，不改变顶层 `pkgs.opencode` 或其他 llm-agents 包。
+
+这不会修改 OpenCode 或 `llm-agents.nix` 的 checkout、Git 历史或工作树，也不维护 fork。Nix store 中的源码构建结果是不可变的。overlay 会检查 `llm-agents.nix` 的 OpenCode 是否仍是已验证的 `1.18.18`；版本变化时直接报错，避免把补丁悄悄应用到未知源码。
+
+### 直接试用本仓库 flake
+
+仓库当前为私有时，可使用 SSH flake URL，或先 clone 后使用本地路径：
+
+```bash
+nix run 'git+ssh://git@github.com/MiRinChan/deepseek-opencode-yuanzu.git#opencode'
+
+# 本地 checkout
+nix run .#opencode
+```
+
+### NixOS / Home Manager flake
+
+下面让主配置、`llm-agents.nix` 和本 overlay 共用同一份 pinned nixpkgs；overlay 顺序不能颠倒：
+
+```nix
+{
+  inputs = {
+    llm-agents.url = "github:numtide/llm-agents.nix";
+    nixpkgs.follows = "llm-agents/nixpkgs";
+
+    deepseek-opencode-anchor.url =
+      "git+ssh://git@github.com/MiRinChan/deepseek-opencode-yuanzu.git";
+    deepseek-opencode-anchor.inputs.llm-agents.follows = "llm-agents";
+    deepseek-opencode-anchor.inputs.nixpkgs.follows = "nixpkgs";
+  };
+
+  outputs =
+    { nixpkgs, llm-agents, deepseek-opencode-anchor, ... }:
+    {
+      nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+        system = "x86_64-linux";
+        modules = [
+          ({ pkgs, ... }: {
+            nixpkgs.overlays = [
+              llm-agents.overlays.shared-nixpkgs
+              deepseek-opencode-anchor.overlays.default
+            ];
+
+            environment.systemPackages = [
+              pkgs.llm-agents.opencode
+            ];
+          })
+        ];
+      };
+    };
+}
+```
+
+Home Manager 独立配置同样把两个 overlay 按上述顺序放进 `nixpkgs.overlays`，再安装 `pkgs.llm-agents.opencode`。
+
+overlay 使用 `--set-default OPENCODE_CONFIG_CONTENT`，因此不会覆盖用户已经显式设置的同名环境变量。如果你自己设置了 `OPENCODE_CONFIG_CONTENT`，请把插件 spec 合并进已有 JSON；Nix 包把可用的完整 spec 暴露为：
+
+```nix
+pkgs.llm-agents.opencode.pluginSpecifier
+```
+
+可独立构建：
+
+```bash
+nix build .#plugin
+nix build .#opencode
+```
+
+覆盖后的 OpenCode 从源码构建，不能复用 `llm-agents.nix` 官方预编译 OpenCode 的 Numtide cache 路径；首次构建会明显更久。
+
 ## 自动模型检测
 
 内置 matcher 会规范化大小写、`.`、`_`、provider/model 路径，并严格识别：
@@ -176,6 +260,7 @@ npm run instrument
 ## 已知限制
 
 - 当前 OpenCode 必须应用 [最小 tools transform patch](patches/opencode-tools-transform.patch)；官方 hook 合并前，预编译稳定版无法完成核心能力。
+- Nix overlay 会在构建沙盒中完成该 patch；当前只支持并严格检查 `llm-agents.nix` 的 OpenCode `1.18.18`。覆盖包是源码构建，首次构建不会命中原预编译包缓存。
 - `experimental.chat.messages.transform` 没有 `sessionID`/model 输入，本插件不使用它删除消息，以免并发 session 串扰或误删真实 history。极少数以 synthetic conversation message 形式注入的自动 context 可能仍可见；assembled system scaffold 会被移除。
 - `personaAfterPromotion: "minimal"` 只能前置 Minimal persona，无法从 assembled string 中安全删除原生 persona 而保留动态 context。
 - 如果权限或 agent 配置本来隐藏了 `bash`/`read`，插件不会越权重新添加；首轮目录将是允许目录与 `bootstrapTools` 的交集，并在 debug 日志报告 missing ID。

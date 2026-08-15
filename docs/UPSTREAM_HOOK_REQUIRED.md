@@ -2,7 +2,7 @@
 
 ## Conclusion
 
-OpenCode `dev` at `4643e65ad6334de3e4e68dedc201d5fbb828c9fe` cannot implement the required two-stage tool catalog as a pure external plugin:
+OpenCode `v1.18.18` and `dev` at `4643e65ad6334de3e4e68dedc201d5fbb828c9fe` cannot implement the required two-stage tool catalog as a pure external plugin:
 
 ```text
 request #1: bash + read
@@ -110,6 +110,6 @@ git apply --check /path/to/opencode-tools-transform.patch
 git apply /path/to/opencode-tools-transform.patch
 ```
 
-The patch changes two files and was validated with `git apply --reverse --check` plus `git diff --check` against the cited OpenCode commit.
+The patch changes two files and was validated with `git apply --check` against the `v1.18.18` tag, plus `git apply --reverse --check` and `git diff --check` against the cited `dev` commit.
 
 The plugin defines the extra hook structurally so it still compiles against the current npm `@opencode-ai/plugin` package. An unpatched OpenCode ignores that property. The plugin does not separately register `experimental.chat.system.transform`, making the unpatched runtime model-visible no-op rather than a partial implementation.
