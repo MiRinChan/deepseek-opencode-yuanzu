@@ -50,6 +50,17 @@ type Tool = {
   execute?: (args: Record<string, unknown>, context: unknown) => unknown
 }
 
+function compatibleInputSchema(nativeSchema: unknown): unknown {
+  if (!nativeSchema || typeof nativeSchema !== "object") return STR_REPLACE_EDITOR_SCHEMA
+  const schema = Object.create(nativeSchema) as Record<string, unknown>
+  Object.defineProperty(schema, "jsonSchema", {
+    configurable: true,
+    enumerable: true,
+    get: () => STR_REPLACE_EDITOR_SCHEMA,
+  })
+  return schema
+}
+
 /** Adapt OpenCode's native filesystem tools behind the Minimal editor name. */
 export function createStrReplaceEditorTool(tools: Record<string, Tool>): Tool | undefined {
   const read = tools.read
@@ -61,7 +72,7 @@ export function createStrReplaceEditorTool(tools: Record<string, Tool>): Tool | 
   return {
     description:
       "Custom editing tool for viewing, creating and editing files in plain-text format\n* State is persistent across tool calls and discussions\n* If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep\n* The `create` command cannot be used if the specified `path` already exists as a file\n* If a `command` generates a long output, it will be truncated and marked with `<response clipped>`\n* The `undo_edit` command will revert the last edit operation on the file at `path`\nNotes on the `str_replace` command:\n* The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!\n* If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context to make it unique\n* The `new_str` parameter should contain the edited lines that should replace the `old_str`\n",
-    inputSchema: STR_REPLACE_EDITOR_SCHEMA,
+    inputSchema: compatibleInputSchema(read.inputSchema),
     async execute(args, context) {
       const command = args.command
       const filePath = args.path
