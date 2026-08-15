@@ -36,7 +36,6 @@ interface Entry {
   activeTarget: boolean
   hydrated: boolean
   hydration?: Promise<void>
-  explicitUserSystem?: string
 }
 
 export interface StateDependencies {
@@ -71,17 +70,12 @@ export class SessionState {
     return created
   }
 
-  async beginRequest(sessionID: string, model: ModelRef, explicitUserSystem?: string): Promise<RequestPhase> {
+  async beginRequest(sessionID: string, model: ModelRef): Promise<RequestPhase> {
     const entry = this.#entry(sessionID)
     entry.activeTarget = this.dependencies.matches(model)
-    if (explicitUserSystem !== undefined) entry.explicitUserSystem = explicitUserSystem
     if (!entry.activeTarget) return "normal"
     await this.#hydrate(sessionID, entry)
     return entry.phase
-  }
-
-  explicitUserSystem(sessionID: string): string | undefined {
-    return this.#entries.get(sessionID)?.explicitUserSystem
   }
 
   promote(sessionID: string, signal: PromotionSignal): boolean {
@@ -169,7 +163,6 @@ export class SessionState {
     const targetAssistants = new Set<string>()
     for (const message of messages) {
       const info = message.info
-      if (info.role === "user" && info.system !== undefined) entry.explicitUserSystem = info.system
       if (info.role !== "assistant") continue
       const model = modelFromInfo(info)
       const target = model ? this.dependencies.matches(model) : false

@@ -27,16 +27,16 @@ NORMAL  ---------------------------------------------> native OpenCode
 BOOTSTRAP -- durable tool/assistant signal ----------> PROMOTED
   |                                                     |
   | Minimal system                                      | native catalog
-  | filtered native catalog: bash/read                  | dynamic context
+  | Minimal catalog: bash/str_replace_editor             | dynamic context
   v                                                     v
 provider request #1                              provider request #2+
 ```
 
 扩展点调用顺序：
 
-1. `chat.message` 获取真实 `providerID`/`modelID`、显式 `UserMessage.system`，并通过只读 session messages API hydrate 历史状态。
-2. 补丁增加的 `experimental.chat.request.transform` 在每次真实 LLM request 上原子接收 assembled system 与 permission-filtered tools。
-3. bootstrap 阶段替换 system，并从同一个工具对象删除不在 allowlist 中的 key。
+1. `chat.message` 获取真实 `providerID`/`modelID`，并通过只读 session messages API hydrate 历史状态。
+2. 补丁增加的 `experimental.chat.request.transform` 在每次真实 LLM request 上原子接收 assembled system 与 permission-filtered tools；显式标记的 title/summary small-model 辅助请求直接透传。
+3. bootstrap 阶段从 permission-filtered 原生工具构造 Minimal schema 适配器，替换 system，再删除其余 key。
 4. `message.part.updated` 与 `tool.execute.before` 观察 durable tool call；completed assistant message 可作为 text-only promotion 信号。
 5. 下一次 loop 重新解析当前完整目录；promoted 阶段不修改 tools。
 6. `session.deleted` 和 `dispose` 清理进程内状态。
@@ -82,7 +82,7 @@ OpenCode 先应用 permission 与 `UserMessage.tools` 规则，再把目录交�
 full_catalog -> delete non-bootstrap keys -> {bash, read}
 ```
 
-插件不重建 tool definition、不添加缺失工具、不写 permission state。Promotion 后完全不触碰目录，所以 OpenCode 新工具、MCP 工具和其他插件工具会自然恢复。
+`bash` 复用原生 execute，只替换模型可见 description/schema；`str_replace_editor` 的四个命令委托给原生 `read/edit/write`。任一 backing tool 被权限过滤时请求会 fail closed，插件不会绕过权限或另建执行器。Promotion 后完全不触碰目录，所以 OpenCode 新工具、MCP 工具和其他插件工具会自然恢复。
 
 ## 模型匹配
 
@@ -138,13 +138,14 @@ Debug 只输出 session/model token、phase、promotion signal 以及工具名/�
 nix develop --command bash -c 'npm test'
 nix develop --command bash -c 'npm run typecheck'
 nix develop --command bash -c 'npm run instrument'
+nix develop --command bash -c 'OPENCODE_INTEGRATION_BIN=/path/to/patched/opencode npm run integration'
 nix build .#plugin
 nix build .#opencode
 ```
 
 测试覆盖非目标透传、DeepSeek bootstrap、tool failure、text-only response、并发 session、model switching、durable resume 与 matcher 配置。
 
-`npm run instrument` 是 plugin-level payload harness：它将 hook 后的 payload 序列化到本地 HTTP capture endpoint，再与 sanitized fixture 对比。它验证 request #1 只有 `bash/read`、promotion 后 request #2 保留完整输入目录，但不等于完整的 patched-OpenCode integration test。
+`npm run instrument` 是快速的 plugin-level payload harness。`npm run integration` 会启动真实 patched OpenCode 和本地 OpenAI-compatible provider，令第一次响应产生 `bash` 与 `str_replace_editor.create` tool call、验证 editor 的真实文件落盘，并直接断言 provider request #1 的完整 Minimal system/两工具 schema，以及同一 user turn 中 request #2 的原生完整目录。
 
 版本更新至少检查：
 
@@ -161,7 +162,7 @@ git diff --check
 |---|---|
 | `anomalyco/opencode` (`dev`) | `4643e65ad6334de3e4e68dedc201d5fbb828c9fe` |
 | `deepseek-ai/deepseek-harness` (`master`) | `47f943859bef60e4160492346772ded9b24f765a` |
-| `xiaobright/dsh-anchored-standard` (`main`) | `6472c1c9431dcfd9072be23bff781b76fe7146c0` |
+| `xiaobright/dsh-anchored-standard` (`main`) | `f57a1bde2dbaba3039bdae8631f78a0cb3ae3ebe` |
 | `xiaobright/modeltest` (`main`) | `04255b55f16c4439e538239fb9783070c4165081` |
 
-DeepSeek Harness Minimal 使用完整 persona `You are a helpful software engineer assistant.` 和 `bash` + `str_replace_editor`。本项目按 OpenCode 的实际 ID 与 Anchored Standard 映射为 `bash` + `read`。
+DeepSeek Harness Minimal 使用完整 persona `You are a helpful software engineer assistant.` 和 `bash` + `str_replace_editor`。本项目复现这两个 provider-visible 契约，并把执行委托给 OpenCode 原生工具。

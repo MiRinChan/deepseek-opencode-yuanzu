@@ -114,6 +114,8 @@ git -C /path/to/opencode apply \
 
 - 必须使用带仓库补丁的 OpenCode；官方合并等价 hook 后才可能只安装插件。
 - 首次请求严格使用 `bash`/`str_replace_editor`；OpenCode 的 `read`/`write`/`edit` 仅作为执行适配，不会出现在 provider-visible 的首轮工具目录中。
+- `bash` 的 provider-visible description/schema 与 Harness Minimal 一致，但底层仍是 OpenCode 的一次性 shell 进程；因此 `cd`、shell 变量等进程状态不会像 Harness persistent bash 那样跨调用保留。插件不会为追求这一点绕过 OpenCode 权限另建 shell runtime。
+- `str_replace_editor` 的 schema 和四个命令与当前 Harness 对齐；执行委托给 OpenCode 原生工具，因此极长单行、二进制文件与格式化/LSP 后处理仍遵循 OpenCode 行为。
 - `personaAfterPromotion: "minimal"` 会在原生 assembled system 前加 Minimal persona，但不会删除后面的原生 persona。
 - 恢复历史 promotion 依赖 OpenCode 的只读 session messages API；不可用时退化为当前进程内状态。
 - Nix 版本从源码构建 OpenCode，首次构建通常比官方预编译包更久。

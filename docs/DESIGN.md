@@ -22,23 +22,24 @@ The design was checked against these default-branch commits on 2026-08-15:
 |---|---|
 | `anomalyco/opencode` (`dev`) | `4643e65ad6334de3e4e68dedc201d5fbb828c9fe` |
 | `deepseek-ai/deepseek-harness` (`master`) | `47f943859bef60e4160492346772ded9b24f765a` |
-| `xiaobright/dsh-anchored-standard` (`main`) | `6472c1c9431dcfd9072be23bff781b76fe7146c0` |
+| `xiaobright/dsh-anchored-standard` (`main`) | `f57a1bde2dbaba3039bdae8631f78a0cb3ae3ebe` |
 | `xiaobright/modeltest` (`main`) | `04255b55f16c4439e538239fb9783070c4165081` |
 
-Current DeepSeek Harness Minimal uses the complete persona `You are a helpful software engineer assistant.` and exposes `bash` plus `str_replace_editor`. Anchored Standard demonstrates a two-stage scaffold using the host's shell/read equivalents. This plugin uses OpenCode's native `bash` and `read` IDs.
+Current DeepSeek Harness Minimal uses the complete persona `You are a helpful software engineer assistant.` and exposes `bash` plus `str_replace_editor`. The plugin reproduces those provider-visible names, descriptions and JSON Schemas. Execution stays behind OpenCode's permission-filtered native `bash`, `read`, `edit` and `write` implementations.
 
 ## Request lifecycle
 
 ```text
 chat.message (once per new user message)
-  capture providerID/modelID and explicit UserMessage.system
+  capture providerID/modelID
   hydrate promotion from read-only session history
         |
         v
 experimental.chat.request.transform (new upstream hook, every LLM request)
   receives assembled system + permission-filtered native tools atomically
+  ignores explicitly marked auxiliary small-model requests
   calculate phase and apply the system transform
-  bootstrap: delete every non-allowlisted key from native tools
+  bootstrap: install Minimal schema adapters, then delete every other key
   promoted: leave tools untouched
         |
         v
@@ -63,7 +64,7 @@ Each `sessionID` has an independent entry:
 type Phase = "bootstrap" | "promoted"
 ```
 
-The in-memory entry also records whether the latest request is a target model and the latest explicit user system string. Hydration uses `client.session.messages()` and considers only target-model assistant messages:
+The in-memory entry also records whether the latest request is a target model. Hydration uses `client.session.messages()` and considers only target-model assistant messages:
 
 - a target assistant tool part is a durable `tool-call` signal;
 - a target assistant with `time.completed` is a durable `assistant-message` signal;
@@ -89,7 +90,7 @@ You are a helpful software engineer assistant.
 [optional explicit UserMessage.system]
 ```
 
-Conversation messages and file parts are never filtered. The plugin deliberately does not use `experimental.chat.messages.transform`, whose current input is `{}` and cannot be scoped by session/model.
+The explicit system value is read from the current request's `UserMessage`, never cached from an earlier model or recovered from unrelated history. Conversation messages and file parts are never filtered. The plugin deliberately does not use `experimental.chat.messages.transform`, whose current input is `{}` and cannot be scoped by session/model.
 
 ### Promoted
 
@@ -101,7 +102,12 @@ Conversation messages and file parts are never filtered. The plugin deliberately
 
 OpenCode resolves native, MCP and plugin tools before LLM preparation. Its existing permission and `UserMessage.tools` rules filter that catalog first. The proposed hook receives that filtered record.
 
-In bootstrap the plugin deletes non-allowlisted properties from the same record. It never reconstructs allowed definitions, so the API receives OpenCode's exact `bash` and `read` objects. It never adds a missing tool and therefore cannot bypass permission filtering.
+In bootstrap the plugin first constructs two thin model-facing adapters from that already-filtered record:
+
+- `bash` keeps the native OpenCode execute function and replaces only its description/input schema with the current Harness Minimal contract;
+- `str_replace_editor` maps `view`, `create`, `str_replace` and `insert` to the available native `read`, `edit` and `write` execute functions, preserving their permission checks and result metadata.
+
+It then deletes every other property. If `bash`, `read`, `edit` or `write` was removed by permission filtering, the request fails closed instead of exposing a partial or widened catalog. `create` uses native `edit`'s create-if-absent path; `str_replace` prechecks one exact literal match; `insert` reads the complete native display then delegates the mutation.
 
 In promoted phase the hook does not mutate `output.tools`. New OpenCode tools and user plugin tools are restored automatically.
 
@@ -113,4 +119,4 @@ For `promoteOn: either`, a completed text-only assistant response also promotes 
 
 ## Instrumentation boundary
 
-`test/provider-request.test.ts` is a plugin-level harness that serializes the post-hook system and tool definitions to an actual local HTTP endpoint. The sanitized fixture checks names at that boundary; it is not a full patched-OpenCode integration test. The OpenCode patch invokes the transform with `resolveTools()` output before provider message/tool construction, so both AI SDK and native LLM runtime later receive `request.system` and `request.tools`.
+`test/provider-request.test.ts` is a fast plugin-level payload harness. `test/opencode-provider-integration.test.ts` starts the Nix-built patched OpenCode with a local OpenAI-compatible provider, returns real `bash` and `str_replace_editor.create` tool calls, verifies the editor changed the filesystem through OpenCode, and inspects the two actual HTTP request bodies. It proves request #1 has the complete Minimal system and exact two schemas, while request #2 in the same user turn contains the untouched full OpenCode catalog.

@@ -24,7 +24,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "npm run build --silent && node --test dist/test/*.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "instrument": "npm run build --silent && node --test dist/test/provider-request.test.js"
+    "instrument": "npm run build --silent && node --test dist/test/provider-request.test.js",
+    "integration": "npm run build --silent && node --test dist/test/opencode-provider-integration.test.js"
   },
   "keywords": [
     "opencode",

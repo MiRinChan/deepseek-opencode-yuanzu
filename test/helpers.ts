@@ -42,6 +42,7 @@ export async function transformRequest(
   model: Model,
   system: string[],
   tools: Record<string, unknown>,
+  userSystem?: string,
 ): Promise<void> {
   await hooks["experimental.chat.request.transform"]?.(
     {
@@ -57,6 +58,7 @@ export async function transformRequest(
         sessionID,
         role: "user",
         model: { providerID: model.providerID, modelID: model.id },
+        ...(userSystem === undefined ? {} : { system: userSystem }),
       } as unknown as UserMessage,
     },
     { system, tools },

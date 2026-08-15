@@ -9,6 +9,7 @@ import {
   fullCatalog,
   gptModel,
   sendChatMessage,
+  targetModel,
   transformRequest,
 } from "./helpers.js"
 
@@ -38,4 +39,23 @@ test("disabled plugin registers no hooks", () => {
 test("unpatched OpenCode has no separately registered system transform", () => {
   const hooks = createAnchorHooks(undefined, dependencies())
   assert.equal(hooks["experimental.chat.system.transform"], undefined)
+})
+
+test("OpenCode auxiliary small-model requests are transparent", async () => {
+  const hooks = createAnchorHooks(undefined, dependencies())
+  const system = ["native small-model system"]
+  const tools = fullCatalog()
+  await hooks["experimental.chat.request.transform"]?.(
+    {
+      sessionID: "session-small",
+      agent: "build",
+      small: true,
+      model: targetModel,
+      provider: { source: "config", info: {} as never, options: {} },
+      message: {} as never,
+    },
+    { system, tools },
+  )
+  assert.deepEqual(system, ["native small-model system"])
+  assert.equal(Object.keys(tools).length, Object.keys(fullCatalog()).length)
 })

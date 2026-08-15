@@ -266,3 +266,14 @@ test("GPT history does not consume first DeepSeek bootstrap and switching back t
   assert.deepEqual(gptSystem, ["native-gpt"])
   assert.equal(Object.keys(gptTools).length, Object.keys(fullCatalog()).length)
 })
+
+test("a previous model's explicit system cannot leak into a DeepSeek bootstrap request", async () => {
+  const hooks = createAnchorHooks(undefined, dependencies())
+  const sessionID = "session-system-switch"
+  await sendChatMessage(hooks, sessionID, gptModel, "GPT-only system")
+  await sendChatMessage(hooks, sessionID, targetModel)
+
+  const system = ["OpenCode native prompt"]
+  await transformRequest(hooks, sessionID, targetModel, system, fullCatalog())
+  assert.deepEqual(system, [MINIMAL_PERSONA])
+})

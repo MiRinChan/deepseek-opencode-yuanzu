@@ -8,6 +8,7 @@ import type {
 import type { Model, UserMessage } from "@opencode-ai/sdk"
 
 import { parseConfig } from "./config.js"
+import { createMinimalBashTool, type OpenCodeTool } from "./bash.js"
 import { createModelMatcher, type ModelRef } from "./matcher.js"
 import { prefixMinimalPersona, replaceWithBootstrapSystem } from "./prompt.js"
 import { createStrReplaceEditorTool } from "./str-replace-editor.js"
@@ -24,6 +25,8 @@ export type { AnchorConfig, PersonaAfterPromotion, PromoteOn } from "./config.js
 export { createModelMatcher, isDeepSeekV4Pro, normalizeModelID } from "./matcher.js"
 export type { ModelRef } from "./matcher.js"
 export { MINIMAL_PERSONA } from "./prompt.js"
+export { MINIMAL_BASH_DESCRIPTION, MINIMAL_BASH_SCHEMA } from "./bash.js"
+export { STR_REPLACE_EDITOR_DESCRIPTION, STR_REPLACE_EDITOR_SCHEMA } from "./str-replace-editor.js"
 export type { Phase } from "./state.js"
 
 type ToolCatalog = Record<string, unknown>
@@ -31,6 +34,8 @@ type ToolCatalog = Record<string, unknown>
 export interface RequestTransformInput {
   sessionID: string
   agent: string
+  /** True for OpenCode's auxiliary small-model requests (for example titles). */
+  small?: boolean
   model: Model
   provider: ProviderContext
   message: UserMessage
@@ -91,33 +96,36 @@ export function createAnchorHooks(
     async "chat.message"(input, output) {
       if (!input.model) return
       const model = { providerID: input.model.providerID, modelID: input.model.modelID }
-      const phase = await state.beginRequest(input.sessionID, model, output.message.system)
+      const phase = await state.beginRequest(input.sessionID, model)
       if (phase !== "normal") {
         debug(`session=${logToken(input.sessionID)} model=${logToken(model.modelID)} phase=${phase}`)
       }
     },
 
     async "experimental.chat.request.transform"(input, output) {
+      if (input.small) return
       const model = modelRef(input.model)
-      const phase = await state.beginRequest(input.sessionID, model, input.message.system)
+      const phase = await state.beginRequest(input.sessionID, model)
       if (phase === "normal") return
 
       debug(`session=${logToken(input.sessionID)} model=${logToken(model.modelID)} phase=${phase}`)
       if (phase === "bootstrap") {
-        replaceWithBootstrapSystem(output.system, state.explicitUserSystem(input.sessionID))
+        replaceWithBootstrapSystem(output.system, input.message.system)
       } else if (config.personaAfterPromotion === "minimal") {
         prefixMinimalPersona(output.system)
       }
 
       if (phase === "bootstrap") {
-        const editor = createStrReplaceEditorTool(output.tools as unknown as Record<string, {
-          description?: string
-          inputSchema?: unknown
-          parameters?: unknown
-          execute?: (args: Record<string, unknown>, context: unknown) => unknown
-        }>)
-        if (editor) output.tools.str_replace_editor = editor
         const allowed = new Set(config.bootstrapTools)
+        const native = output.tools as Record<string, OpenCodeTool>
+        if (allowed.has("bash")) {
+          const bash = createMinimalBashTool(native)
+          if (bash) native.bash = bash
+        }
+        if (allowed.has("str_replace_editor")) {
+          const editor = createStrReplaceEditorTool(native)
+          if (editor) native.str_replace_editor = editor
+        }
         for (const toolID of Object.keys(output.tools)) {
           if (!allowed.has(toolID)) delete output.tools[toolID]
         }
@@ -128,6 +136,9 @@ export function createAnchorHooks(
         )
         if (missing.length > 0) {
           debug(`session=${logToken(input.sessionID)} request missing=${missing.map(logToken).join(",")}`)
+          throw new Error(
+            `[dsv4-anchor] cannot assemble Minimal bootstrap tools: ${missing.join(", ")} unavailable after OpenCode permission filtering`,
+          )
         }
         return
       }

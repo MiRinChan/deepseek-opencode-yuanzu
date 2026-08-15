@@ -5,7 +5,7 @@
 OpenCode `v1.18.18` and `dev` at `4643e65ad6334de3e4e68dedc201d5fbb828c9fe` cannot implement the required two-stage tool catalog as a pure external plugin:
 
 ```text
-request #1: bash + read
+request #1: bash + str_replace_editor
 first tool call
 request #2 in the same user turn: full native catalog
 ```
@@ -49,9 +49,9 @@ There is no public message-update API. Sending another prompt creates another us
 
 Writing deny/allow rules would mutate durable security state, interact with agent/global rule ordering and risk widening or narrowing permissions. It is not a catalog transform and is intentionally not used.
 
-### Tool wrappers or a single multiplexing tool
+### Reimplemented executors or a single multiplexing tool
 
-They would not preserve OpenCode's actual `bash`/`read` definitions and would create a parallel executor. This violates the project scope.
+A parallel shell/filesystem runtime would bypass OpenCode permissions and violate the project scope. The plugin only uses thin schema/name adapters whose execution delegates to permission-filtered native tools.
 
 ### HTTP proxy/MITM
 
@@ -66,6 +66,7 @@ The included patch adds this hook to the existing `Hooks` interface:
   input: {
     sessionID: string
     agent: string
+    small: boolean
     model: Model
     provider: ProviderContext
     message: UserMessage
@@ -85,6 +86,7 @@ const request = yield* input.plugin.trigger(
   {
     sessionID: input.sessionID,
     agent: input.agent.name,
+    small: input.small ?? false,
     model: input.model,
     provider: input.provider,
     message: input.user,
@@ -96,6 +98,7 @@ const request = yield* input.plugin.trigger(
 This location has the required properties:
 
 - runs once per actual LLM request, including the second request in one user turn;
+- identifies auxiliary small-model requests so an anchoring plugin can leave title/summary work untouched;
 - receives the assembled system and live native catalog after permission filtering in one call;
 - affects both AI SDK and native runtime paths through `Prepared.tools`;
 - promoted plugins can leave the record untouched, preserving future and third-party tools;
@@ -110,6 +113,6 @@ git apply --check /path/to/opencode-tools-transform.patch
 git apply /path/to/opencode-tools-transform.patch
 ```
 
-The patch changes two files and was validated with `git apply --check` against the `v1.18.18` tag, plus `git apply --reverse --check` and `git diff --check` against the cited `dev` commit.
+The patch changes two files. It was validated by a complete Nix build against `v1.18.18`, by clean `git apply --check` plus `git diff --check` against the cited `dev` commit, and by the local-provider integration test that observes both HTTP request bodies.
 
 The plugin defines the extra hook structurally so it still compiles against the current npm `@opencode-ai/plugin` package. An unpatched OpenCode ignores that property. The plugin does not separately register `experimental.chat.system.transform`, making the unpatched runtime model-visible no-op rather than a partial implementation.
