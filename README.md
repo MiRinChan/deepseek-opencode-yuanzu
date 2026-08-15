@@ -116,6 +116,9 @@ git -C /path/to/opencode apply \
 
 `rewriteThinking: true` 时，目标模型每条 assistant 消息的思考链（reasoning part）在提交时会被改写：所有 `Let me`（大小写不敏感、整词匹配）随机替换为 `thinkingReplacements` 中的一项，逐处独立随机；`let me` 开头小写时保持小写形式。这依赖同一组上游补丁里的 `experimental.reasoning.transform` hook。
 
+> [!NOTE]
+> 仓库的 Nix overlay 默认在 wrapper 的 `OPENCODE_CONFIG_CONTENT` 里开启 `rewriteThinking`；npm 直装时默认关闭，需显式配置。
+
 ```json
 {
   "$schema": "https://opencode.ai/config.json",

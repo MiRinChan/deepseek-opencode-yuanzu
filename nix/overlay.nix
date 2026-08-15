@@ -66,6 +66,7 @@ let
           ];
           personaAfterPromotion = "minimal";
           promoteOn = "either";
+          rewriteThinking = true;
           debug = false;
         }
       ]
