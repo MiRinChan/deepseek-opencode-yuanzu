@@ -1,0 +1,44 @@
+[
+  {
+    "system": [
+      "You are a helpful software engineer assistant."
+    ],
+    "tools": [
+      {
+        "name": "bash",
+        "marker": "bash-definition"
+      },
+      {
+        "name": "read",
+        "marker": "read-definition"
+      }
+    ]
+  },
+  {
+    "system": [
+      "You are a helpful software engineer assistant.\n\nOpenCode native persona\nAGENTS context\nskill catalog"
+    ],
+    "tools": [
+      {
+        "name": "apply_patch",
+        "marker": "apply_patch-definition"
+      },
+      {
+        "name": "bash",
+        "marker": "bash-definition"
+      },
+      {
+        "name": "read",
+        "marker": "read-definition"
+      },
+      {
+        "name": "web_search",
+        "marker": "web-definition"
+      },
+      {
+        "name": "write",
+        "marker": "write-definition"
+      }
+    ]
+  }
+]

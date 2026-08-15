@@ -1,0 +1,77 @@
+diff --git a/packages/opencode/src/session/llm/request.ts b/packages/opencode/src/session/llm/request.ts
+index 4f93411..d497f21 100644
+--- a/packages/opencode/src/session/llm/request.ts
++++ b/packages/opencode/src/session/llm/request.ts
+@@ -81,6 +81,17 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
+     !input.small && input.model.variants && input.user.model.variant
+       ? input.model.variants[input.user.model.variant]
+       : {}
++  const request = yield* input.plugin.trigger(
++    "experimental.chat.request.transform",
++    {
++      sessionID: input.sessionID,
++      agent: input.agent.name,
++      model: input.model,
++      provider: input.provider,
++      message: input.user,
++    },
++    { system, tools: resolveTools(input) },
++  )
+   const base = input.small
+     ? ProviderTransform.smallOptions(input.model)
+     : ProviderTransform.options({
+@@ -96,13 +107,13 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
+     delete options.reasoningSummary
+     delete options.include
+   }
+-  if (isOpenaiOauth) options.instructions = system.join("\n")
++  if (isOpenaiOauth) options.instructions = request.system.join("\n")
+ 
+   const messages =
+     isOpenaiOauth || input.isWorkflow
+       ? input.messages
+       : [
+-          ...system.map(
++          ...request.system.map(
+             (x): ModelMessage => ({
+               role: "system",
+               content: x,
+@@ -145,7 +156,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
+     },
+   )
+ 
+-  const tools = resolveTools(input)
++  const tools = request.tools
+   // Codex parity: OpenAI Responses-family providers hardcode `strict: false`
+   // on every function tool so MCP-sourced and dynamic schemas that don't
+   // satisfy OpenAI's structured-outputs constraints still register.
+@@ -179,7 +190,7 @@ export const prepare = Effect.fn("LLMRequestPrep.prepare")(function* (input: Pre
+     : undefined
+ 
+   return {
+-    system,
++    system: request.system,
+     messages,
+     tools: Object.fromEntries(Object.entries(tools).toSorted(([a], [b]) => a.localeCompare(b))),
+     params,
+diff --git a/packages/plugin/src/index.ts b/packages/plugin/src/index.ts
+index edfa013..17af1e4 100644
+--- a/packages/plugin/src/index.ts
++++ b/packages/plugin/src/index.ts
+@@ -258,6 +258,16 @@ export interface Hooks {
+     input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
+     output: { headers: Record<string, string> },
+   ) => Promise<void>
++  /**
++   * Inspect or rewrite the assembled system prompt and permission-filtered
++   * native tool catalog for one LLM request.
++   *
++   * Leaving both output fields untouched preserves native behavior.
++   */
++  "experimental.chat.request.transform"?: (
++    input: { sessionID: string; agent: string; model: Model; provider: ProviderContext; message: UserMessage },
++    output: { system: string[]; tools: Record<string, any> },
++  ) => Promise<void>
+   "permission.ask"?: (input: Permission, output: { status: "ask" | "deny" | "allow" }) => Promise<void>
+   "command.execute.before"?: (
+     input: { command: string; sessionID: string; arguments: string },
