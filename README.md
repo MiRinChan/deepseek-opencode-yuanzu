@@ -114,7 +114,9 @@ git -C /path/to/opencode apply \
 
 ### 思考链改写
 
-`rewriteThinking: true` 时，目标模型每条 assistant 消息的思考链（reasoning part）在提交时会被改写：所有 `Let me`（大小写不敏感、整词匹配）随机替换为 `thinkingReplacements` 中的一项，逐处独立随机；`let me` 开头小写时保持小写形式。这依赖同一组上游补丁里的 `experimental.reasoning.transform` hook。
+`rewriteThinking: true` 时，目标模型每次调用 chat completions API **上传的历史**会在本地先改写：所有 `Let me`（大小写不敏感、整词匹配）随机替换为 `thinkingReplacements` 中的一项，逐处独立随机；`let me` 开头小写时保持小写形式。改写只作用于上传给模型的载荷，不修改本地存储。
+
+同时目标模型**新产生的思考链**在提交时也会被改写，因此本地显示/存储的 reasoning 同样不含 `Let me`。这依赖上游补丁里的 `experimental.reasoning.transform` hook（提交改写）和公开的 `experimental.chat.messages.transform` hook（上传改写）。
 
 > [!NOTE]
 > 仓库的 Nix overlay 默认在 wrapper 的 `OPENCODE_CONFIG_CONTENT` 里开启 `rewriteThinking`；npm 直装时默认关闭，需显式配置。
@@ -143,7 +145,7 @@ git -C /path/to/opencode apply \
 - `bash` 的 provider-visible description/schema 与 Harness Minimal 一致，但底层仍是 OpenCode 的一次性 shell 进程；因此 `cd`、shell 变量等进程状态不会像 Harness persistent bash 那样跨调用保留。插件不会为追求这一点绕过 OpenCode 权限另建 shell runtime。
 - `str_replace_editor` 的 schema 和四个命令与当前 Harness 对齐；执行委托给 OpenCode 原生工具，因此极长单行、二进制文件与格式化/LSP 后处理仍遵循 OpenCode 行为。
 - `personaAfterPromotion: "minimal"` 会在原生 assembled system 前加 Minimal persona，但不会删除后面的原生 persona。
-- `rewriteThinking` 在 reasoning 流式生成结束、part 提交时改写整段文本；生成过程中实时流出的原文不会逐 delta 改写，结束后会刷新为改写结果。
+- `rewriteThinking` 的提交改写发生在 reasoning 流式生成结束、part 提交时改写整段文本；生成过程中实时流出的原文不会逐 delta 改写，结束后会刷新为改写结果。上传改写始终生效于每次 chat completions 请求。
 - 恢复历史 promotion 依赖 OpenCode 的只读 session messages API；不可用时退化为当前进程内状态。
 - Nix 版本从源码构建 OpenCode，首次构建通常比官方预编译包更久。
 

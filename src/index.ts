@@ -162,6 +162,20 @@ export function createAnchorHooks(
       output.text = rewriteThinkingText(output.text, { replacements: config.thinkingReplacements })
     },
 
+    async "experimental.chat.messages.transform"(_input, output) {
+      if (!config.rewriteThinking) return
+      for (const message of output.messages) {
+        const info = message.info as { role?: string; providerID?: string; modelID?: string }
+        if (info.role !== "assistant" || !info.providerID || !info.modelID) continue
+        if (!matches({ providerID: info.providerID, modelID: info.modelID })) continue
+        for (const part of message.parts) {
+          if (part.type === "reasoning") {
+            part.text = rewriteThinkingText(part.text, { replacements: config.thinkingReplacements })
+          }
+        }
+      }
+    },
+
     async event({ event }) {
       state.observeEvent(event as AnchorEvent)
     },

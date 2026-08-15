@@ -4,7 +4,7 @@
 
 ## 行为契约
 
-插件只负责五件事：
+插件只负责六件事：
 
 ```text
 detect target model
@@ -12,6 +12,7 @@ detect target model
   -> apply Minimal-aligned system
   -> narrow the first request's native tool catalog
   -> observe a durable signal and restore native behavior
+  -> rewrite thinking: Let me -> I will / We will / Let's
 ```
 
 它不是 agent runtime、permission layer、provider proxy 或 tool executor。非目标模型必须完全透传；没有 request-hook 补丁的 OpenCode 必须保持 model-visible no-op。
@@ -39,8 +40,9 @@ provider request #1                              provider request #2+
 3. bootstrap 阶段从 permission-filtered 原生工具构造 Minimal schema 适配器，替换 system，再删除其余 key。
 4. `message.part.updated` 与 `tool.execute.before` 观察 durable tool call；completed assistant message 可作为 text-only promotion 信号。
 5. `experimental.reasoning.transform` 在每条 reasoning part 流式结束后、提交到 store 前获得整段文本，`rewriteThinking` 配置开启时改写其中的 `Let me`。
-6. 下一次 loop 重新解析当前完整目录；promoted 阶段不修改 tools。
-7. `session.deleted` 和 `dispose` 清理进程内状态。
+6. `experimental.chat.messages.transform` 在每次 LLM 请求前改写目标模型历史消息中的 reasoning part，只影响上传载荷，不改本地存储。
+7. 下一次 loop 重新解析当前完整目录；promoted 阶段不修改 tools。
+8. `session.deleted` 和 `dispose` 清理进程内状态。
 
 原子 hook 很重要：system 数组无需跨 hook 缓存和配对；未打补丁时 hook 不会被调用，也就不会出现 Minimal system 配完整工具目录的半成品状态。
 

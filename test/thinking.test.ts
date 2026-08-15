@@ -1,6 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
+import type { Message, Part } from "@opencode-ai/sdk"
+
 import { createAnchorHooks, rewriteThinkingText } from "../src/index.js"
 import { dependencies, flashModel, gptModel, targetModel } from "./helpers.js"
 
@@ -95,4 +97,66 @@ test("empty thinkingReplacements disables rewriting", async () => {
     output,
   )
   assert.equal(output.text, "Let me inspect.")
+})
+
+function assistantMessages(
+  model: { providerID: string; modelID: string },
+  reasoning: string[],
+  text = "Assistant reply.",
+) {
+  return {
+    messages: [
+      {
+        info: { role: "assistant", providerID: model.providerID, modelID: model.modelID },
+        parts: [
+          ...reasoning.map((r) => ({ type: "reasoning" as const, text: r })),
+          { type: "text" as const, text },
+        ],
+      },
+      {
+        info: { role: "user" as const, providerID: model.providerID, modelID: model.modelID },
+        parts: [{ type: "text" as const, text: "Question" }],
+      },
+    ] as unknown as { info: Message; parts: Part[] }[],
+  }
+}
+
+test("upload transform rewrites reasoning in target-model history", async () => {
+  const hooks = createAnchorHooks({ rewriteThinking: true }, dependencies())
+  const { messages } = assistantMessages(
+    { providerID: "opencode-go", modelID: "deepseek-v4-pro" },
+    ["Let me inspect the stack.", "Let me then run it"],
+  )
+  await hooks["experimental.chat.messages.transform"]?.({}, { messages })
+  const reasoning = messages[0]!.parts.filter((p) => p.type === "reasoning")
+  const first = reasoning[0] as { type: "reasoning"; text: string } | undefined
+  const second = reasoning[1] as { type: "reasoning"; text: string } | undefined
+  assert.ok(first)
+  assert.ok(second)
+  assert.ok(!/\blet me\b/i.test(first.text))
+  assert.ok(!/\blet me\b/i.test(second.text))
+  for (const choice of [first, second]) {
+    assert.ok(["I will", "We will", "Let's"].some((prefix) => choice.text.startsWith(prefix)))
+  }
+})
+
+test("upload transform leaves non-target model history untouched", async () => {
+  const hooks = createAnchorHooks({ rewriteThinking: true }, dependencies())
+  const { messages } = assistantMessages({ providerID: "openai", modelID: "gpt-5.4" }, [
+    "Let me inspect the stack.",
+  ])
+  await hooks["experimental.chat.messages.transform"]?.({}, { messages })
+  assert.equal((messages[0]!.parts[0] as { text: string }).text, "Let me inspect the stack.")
+})
+
+test("upload transform is off by default and leaves text parts untouched", async () => {
+  const hooks = createAnchorHooks(undefined, dependencies())
+  const { messages } = assistantMessages(
+    { providerID: "opencode-go", modelID: "deepseek-v4-pro" },
+    ["Let me inspect."],
+    "Let me answer in the reply text.",
+  )
+  await hooks["experimental.chat.messages.transform"]?.({}, { messages })
+  assert.equal((messages[0]!.parts[0] as { text: string }).text, "Let me inspect.")
+  assert.equal((messages[0]!.parts[1] as { text: string }).text, "Let me answer in the reply text.")
 })
