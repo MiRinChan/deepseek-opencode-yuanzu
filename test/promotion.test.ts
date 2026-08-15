@@ -18,7 +18,7 @@ test("tool execution promotes before success or failure and request two gets ful
 
   const firstTools = fullCatalog()
   await transformRequest(hooks, "session-promotion", targetModel, ["native first"], firstTools)
-  assert.deepEqual(Object.keys(firstTools).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(firstTools).sort(), ["bash", "str_replace_editor"])
 
   await hooks["tool.execute.before"]?.(
     { tool: "bash", sessionID: "session-promotion", callID: "call-fails" },
@@ -127,7 +127,7 @@ test("promoteOn tool-call keeps a text-only response in bootstrap", async () => 
   })
   const tools = fullCatalog()
   await transformRequest(hooks, "session-tool-only", targetModel, ["native"], tools)
-  assert.deepEqual(Object.keys(tools).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(tools).sort(), ["bash", "str_replace_editor"])
 })
 
 test("promotion is isolated across concurrent sessions", async () => {
@@ -148,7 +148,7 @@ test("promotion is isolated across concurrent sessions", async () => {
     transformRequest(hooks, "session-b", targetModel, ["native-b"], toolsB),
   ])
   assert.equal(Object.keys(toolsA).length, Object.keys(fullCatalog()).length)
-  assert.deepEqual(Object.keys(toolsB).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(toolsB).sort(), ["bash", "str_replace_editor"])
 })
 
 test("durable target history recovers promotion after plugin restart", async () => {
@@ -235,7 +235,7 @@ test("session deletion prunes assistant routing state", async () => {
   await sendChatMessage(hooks, sessionID, targetModel)
   const tools = fullCatalog()
   await transformRequest(hooks, sessionID, targetModel, ["native"], tools)
-  assert.deepEqual(Object.keys(tools).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(tools).sort(), ["bash", "str_replace_editor"])
 })
 
 test("GPT history does not consume first DeepSeek bootstrap and switching back to GPT is transparent", async () => {
@@ -257,7 +257,7 @@ test("GPT history does not consume first DeepSeek bootstrap and switching back t
   await sendChatMessage(hooks, "session-switch", targetModel)
   const deepseekTools = fullCatalog()
   await transformRequest(hooks, "session-switch", targetModel, ["native-deepseek"], deepseekTools)
-  assert.deepEqual(Object.keys(deepseekTools).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(deepseekTools).sort(), ["bash", "str_replace_editor"])
 
   await sendChatMessage(hooks, "session-switch", gptModel)
   const gptTools = fullCatalog()

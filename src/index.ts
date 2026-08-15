@@ -10,6 +10,7 @@ import type { Model, UserMessage } from "@opencode-ai/sdk"
 import { parseConfig } from "./config.js"
 import { createModelMatcher, type ModelRef } from "./matcher.js"
 import { prefixMinimalPersona, replaceWithBootstrapSystem } from "./prompt.js"
+import { createStrReplaceEditorTool } from "./str-replace-editor.js"
 import {
   SessionState,
   type AnchorEvent,
@@ -109,6 +110,13 @@ export function createAnchorHooks(
       }
 
       if (phase === "bootstrap") {
+        const editor = createStrReplaceEditorTool(output.tools as unknown as Record<string, {
+          description?: string
+          inputSchema?: unknown
+          parameters?: unknown
+          execute?: (args: Record<string, unknown>, context: unknown) => unknown
+        }>)
+        if (editor) output.tools.str_replace_editor = editor
         const allowed = new Set(config.bootstrapTools)
         for (const toolID of Object.keys(output.tools)) {
           if (!allowed.has(toolID)) delete output.tools[toolID]

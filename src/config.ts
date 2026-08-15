@@ -15,7 +15,7 @@ export interface AnchorConfig {
 export const DEFAULT_CONFIG: Readonly<AnchorConfig> = Object.freeze({
   enabled: true,
   models: ["deepseek-v4-pro"],
-  bootstrapTools: ["bash", "read"],
+  bootstrapTools: ["bash", "str_replace_editor"],
   personaAfterPromotion: "minimal",
   promoteOn: "either",
   debug: false,

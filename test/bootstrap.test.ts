@@ -4,11 +4,10 @@ import test from "node:test"
 import { createAnchorHooks, MINIMAL_PERSONA } from "../src/index.js"
 import { dependencies, fullCatalog, sendChatMessage, targetModel, transformRequest } from "./helpers.js"
 
-test("bootstrap exposes exactly native bash and read definitions", async () => {
+test("bootstrap exposes bash and the original Minimal editor schema", async () => {
   const hooks = createAnchorHooks(undefined, dependencies())
   const tools = fullCatalog()
   const bash = tools.bash
-  const read = tools.read
   const system = ["OpenCode native agent prompt", "workspace instructions"]
 
   await sendChatMessage(hooks, "session-bootstrap", targetModel)
@@ -23,9 +22,12 @@ test("bootstrap exposes exactly native bash and read definitions", async () => {
     { system, tools },
   )
 
-  assert.deepEqual(Object.keys(tools).sort(), ["bash", "read"])
+  assert.deepEqual(Object.keys(tools).sort(), ["bash", "str_replace_editor"])
   assert.equal(tools.bash, bash)
-  assert.equal(tools.read, read)
+  const editor = (tools as Record<string, unknown>).str_replace_editor
+  assert.ok(editor)
+  const schema = (editor as { inputSchema: { properties: { command: { enum: string[] } } } }).inputSchema
+  assert.deepEqual(schema.properties.command.enum, ["view", "create", "str_replace", "insert", "undo_edit"])
   assert.deepEqual(system, [MINIMAL_PERSONA])
 })
 

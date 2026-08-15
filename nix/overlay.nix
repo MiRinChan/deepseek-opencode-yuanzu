@@ -62,7 +62,7 @@ let
           models = [ "deepseek-v4-pro" ];
           bootstrapTools = [
             "bash"
-            "read"
+            "str_replace_editor"
           ];
           personaAfterPromotion = "minimal";
           promoteOn = "either";

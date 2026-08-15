@@ -2,7 +2,7 @@
 
 > npm package: `opencode-deepseek-v4-anchor`
 
-为 OpenCode 的 DeepSeek V4 Pro 会话提供两阶段 harness：第一次模型请求只暴露 Minimal persona 与 `bash`/`read`，出现首个可靠的 tool call 或完整 assistant message 后，自动恢复 OpenCode 的原生上下文和完整工具目录。
+为 OpenCode 的 DeepSeek V4 Pro 会话提供两阶段 harness：第一次模型请求严格暴露 Minimal persona 与 `bash`/`str_replace_editor`，出现首个可靠的 tool call 或完整 assistant message 后，自动恢复 OpenCode 的原生上下文和完整工具目录。
 
 GPT、Claude、DeepSeek V4 Flash、V3、R1 等非目标模型保持原样。无需切换 agent、preset 或输入特殊 prompt。
 
@@ -87,7 +87,7 @@ git -C /path/to/opencode apply \
       {
         "enabled": true,
         "models": ["deepseek-v4-pro"],
-        "bootstrapTools": ["bash", "read"],
+        "bootstrapTools": ["bash", "str_replace_editor"],
         "personaAfterPromotion": "minimal",
         "promoteOn": "either",
         "debug": false
@@ -103,7 +103,7 @@ git -C /path/to/opencode apply \
 |---|---|---|
 | `enabled` | `true` | 启用插件 |
 | `models` | `["deepseek-v4-pro"]` | 增加 exact、`glob:` 或 `regex:` 匹配规则 |
-| `bootstrapTools` | `["bash", "read"]` | 首次请求允许保留的原生工具 ID |
+| `bootstrapTools` | `["bash", "str_replace_editor"]` | 首次请求的 Minimal 工具 ID |
 | `personaAfterPromotion` | `"minimal"` | promotion 后选择 `minimal` 前缀或 `original` 原样透传 |
 | `promoteOn` | `"either"` | 选择 `either`、`tool-call` 或 `assistant-message` |
 | `debug` | `false` | 输出不含 prompt、工具参数和凭据的状态日志 |
@@ -113,7 +113,7 @@ git -C /path/to/opencode apply \
 ## 已知限制
 
 - 必须使用带仓库补丁的 OpenCode；官方合并等价 hook 后才可能只安装插件。
-- 首次请求只保留当前权限规则已经允许的 `bash`/`read`，插件不会越权添加工具。
+- 首次请求严格使用 `bash`/`str_replace_editor`；OpenCode 的 `read`/`write`/`edit` 仅作为执行适配，不会出现在 provider-visible 的首轮工具目录中。
 - `personaAfterPromotion: "minimal"` 会在原生 assembled system 前加 Minimal persona，但不会删除后面的原生 persona。
 - 恢复历史 promotion 依赖 OpenCode 的只读 session messages API；不可用时退化为当前进程内状态。
 - Nix 版本从源码构建 OpenCode，首次构建通常比官方预编译包更久。

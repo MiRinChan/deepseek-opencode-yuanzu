@@ -63,12 +63,14 @@ export async function transformRequest(
   )
 }
 
-export function fullCatalog(): Record<string, { marker: string }> {
+export function fullCatalog(): Record<string, { marker: string; execute?: (args: unknown, context: unknown) => unknown }> {
+  const execute = async () => ({ title: "ok", output: "ok", metadata: {} })
   return {
-    apply_patch: { marker: "apply_patch-definition" },
-    bash: { marker: "bash-definition" },
-    read: { marker: "read-definition" },
-    web_search: { marker: "web-definition" },
-    write: { marker: "write-definition" },
+    apply_patch: { marker: "apply_patch-definition", execute },
+    bash: { marker: "bash-definition", execute },
+    edit: { marker: "edit-definition", execute },
+    read: { marker: "read-definition", execute },
+    web_search: { marker: "web-definition", execute },
+    write: { marker: "write-definition", execute },
   }
 }
